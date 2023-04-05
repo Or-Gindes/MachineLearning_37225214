@@ -62,7 +62,25 @@ def compute_information_gain(X, y, node_indices, feature):
     """
     left, right = split_dataset(X, node_indices, feature)
     node_entropy = compute_entropy(y[node_indices])
-    l_entropy = compute_entropy(y[left])
-    r_entropy = compute_entropy(y[right])
-    cost = node_entropy - (len(left) / len(node_indices) * l_entropy + len(right) / len(node_indices) * r_entropy)
+    left_entropy = compute_entropy(y[left])
+    right_entropy = compute_entropy(y[right])
+    weighted_entropy = (len(left) / len(node_indices) * left_entropy + len(right) / len(node_indices) * right_entropy)
+    cost = node_entropy - weighted_entropy
     return cost
+
+
+def get_best_split(X, y, node_indices):
+    """
+    Returns the optimal feature and threshold value
+    to split the node data
+
+    Args:
+        X (ndarray):            Data matrix of shape(n_samples, n_features)
+        y (array like):         list or ndarray with n_samples containing the target variable
+        node_indices (ndarray): List containing the active indices. I.e, the samples being considered in this step.
+
+    Returns:
+        best_feature (int):     The index of the best feature to split
+    """
+    best_feature = np.argmax([compute_information_gain(X, y, node_indices, feature) for feature in range(X.shape[1])])
+    return best_feature

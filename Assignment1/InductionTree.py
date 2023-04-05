@@ -42,5 +42,6 @@ def split_dataset(X, node_indices, feature):
     """
 
     # You need to return the following variables correctly
-    left_indices = []
-    right_indices = []
+    left_indices = np.array(node_indices)[np.where(X[node_indices, feature] == 1)[0]].tolist()
+    right_indices = np.array(node_indices)[np.where(X[node_indices, feature] == 0)[0]].tolist()
+    return left_indices, right_indices

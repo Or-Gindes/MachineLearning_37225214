@@ -82,5 +82,6 @@ def get_best_split(X, y, node_indices):
     Returns:
         best_feature (int):     The index of the best feature to split
     """
-    best_feature = np.argmax([compute_information_gain(X, y, node_indices, feature) for feature in range(X.shape[1])])
+    gains = [compute_information_gain(X, y, node_indices, feature) for feature in range(X.shape[1])]
+    best_feature = np.argmax(gains)
     return best_feature

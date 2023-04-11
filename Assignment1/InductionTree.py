@@ -7,8 +7,8 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
-from sklearn.model_selection import KFold
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, make_scorer
+from sklearn.model_selection import RepeatedKFold, cross_validate
 import wandb
 
 
@@ -102,6 +102,7 @@ class Node:
     """
     Support class for binary decision tree build of nodes
     """
+
     def __init__(self, node_probas=None, split_feature=None, left_child=None, right_child=None):
         """
         Args:
@@ -124,6 +125,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
     ClassifierMixin provides a score method
     successively picking the best feature to split on until we reach the maximum depth defined by the user
     """
+
     def __init__(self, max_depth=None):
         """
         Initializes the decision tree estimator with give max_depth parameters
@@ -146,7 +148,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
         if len(X) != len(y):
             raise ValueError("X and y have mismatching shapes")
 
-        self._n_classes = len(np.unique(y)) # will be 2 because of binary tree
+        self._n_classes = len(np.unique(y))  # will be 2 because of binary tree
         self._n_features = X.shape[1]
         self._tree = self._build_tree(X, y, list(range(X.shape[0])))
 
@@ -165,7 +167,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
         # 1 + 2. only one sample in node / All samples in node have the same target value - pure node
         if len(node_indices) == 1 or len(np.unique(y[node_indices])) == 1:
             pred_probas = np.zeros(self._n_classes)
-            pred_probas[y[0]] = 1.0
+            pred_probas[int(y[node_indices][0])] = 1.0
             return Node(node_probas=pred_probas)
         # 3 + 4. No more features to split by / 4. Maximum depth - mixed node
         if depth == self._n_features or (self.max_depth and depth >= self.max_depth):
@@ -230,7 +232,8 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
     BaseEstimator provides get_params and set_params methods
     ClassifierMixin provides a score method
     """
-    def __init__(self, n_estimators=3, max_samples=0.5, max_features=0.5, max_depth=None):
+
+    def __init__(self, n_estimators=10, max_samples=1.0, max_features=1.0, max_depth=None):
         """
         Initializes the decision tree estimator with give max_depth parameters
         Args:
@@ -263,10 +266,12 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
         # fit n base estimators
         for i in range(self.n_estimators):
             # randomly select training samples from X with replacement for each base classifier
-            tree_indices = np.random.choice(range(X.shape[0]), size=math.ceil(self.max_samples*X.shape[0]), replace=True)
+            tree_indices = np.random.choice(range(X.shape[0]), size=math.ceil(self.max_samples * X.shape[0]),
+                                            replace=True)
 
             # randomly select features from X without replacements from for each base classifier
-            tree_features = np.random.choice(range(X.shape[1]), size=math.ceil(self.max_features*X.shape[1]), replace=False)
+            tree_features = np.random.choice(range(X.shape[1]), size=math.ceil(self.max_features * X.shape[1]),
+                                             replace=False)
 
             base_tree = MyID3(max_depth=self.max_depth)
             base_tree.fit(X=X[np.ix_(tree_indices, tree_features)], y=y[tree_indices])
@@ -316,34 +321,55 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
         return np.argmax(pred_probas, axis=1)
 
 
+EVALUATION_DICT = {"Accuracy": accuracy_score, "Precision": precision_score, "Recall": recall_score,
+                   "F1-score": f1_score, "ROC_AUC": roc_auc_score}
+
+MODEL_DICT = {"DecisionTreeClassifier": DecisionTreeClassifier, "BaggingClassifier": BaggingClassifier,
+              "MyID3": MyID3, "MyBaggingID3": MyBaggingID3}
+
+
 # 7. Evaluation
-def evaluate(binary_array, repetitions=2, n_folds=5):
+def evaluate(X, y, repetitions=2, n_folds=5):
     """
     Compares the performance of MyID3 and MyBaggingID3 models against sklearn DecisionTreeClassifier and
     BaggingClassifier respectively use repeated K-fold cross-validation to evaluate both algorithms,
     Using at least 2 repetitions and at least 5 folds and returns Evaluation metrics
 
     Args:
-        binary_array (ndarray): Preprocessed binary Data matrix of shape(n_samples, n_features)
+        X (ndarray):    Preprocessed binary Data matrix of shape(n_samples, n_features)
+        y (array like): list or ndarray with n_samples containing binary target variable
         repetitions (int): number of repetitions >= 2
         n_folds (int): number of folds >= 5
 
     Returns:
         evaluation_dict (dict): Dictionary of evaluation scores - Accuracy, Precision, Recall, F1-score, ROC_AUC score
-        from sklearn - accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
     """
+    assert (len(np.unique(y)) == 2 and len(np.unique(X)) == 2)
     # TODO: Implement using weights & biases package to collect the results
     # tutorial - https://colab.research.google.com/github/wandb/examples/blob/master/colabs/scikit/Simple_Scikit_Integration.ipynb#scrollTo=PusIQpdPzUbP
     # create new project in https://wandb.ai/machinelearning_37225214/projects
-    pass
+
+    evaluation_dict = dict()
+    # Perform the evaluation process for each of the models
+    for model_name, model_class in MODEL_DICT.items():
+        evaluation_dict[model_name] = dict()
+        rkf = RepeatedKFold(n_splits=n_folds, n_repeats=repetitions)
+        model = model_class()
+        scoring = cross_validate(model, X, y, scoring={name: make_scorer(metric) for name, metric in EVALUATION_DICT.items()}, cv=rkf)
+        for metric, scores in scoring.items():
+            evaluation_dict[model_name][metric] = np.mean(scores)
+            if 'time' in metric:    # Transform fit & train metrics to units of ms
+                evaluation_dict[model_name][metric] *= 1000
+    return evaluation_dict
 
 
 if __name__ == "__main__":
-    # Debugging
-    X = np.random.randint(0, 2, size=(100, 3))
-    y = np.random.randint(0, 2, size=100)
-    X_test = [[0, 0, 0], [1, 1, 1], [0, 1, 0], [1, 1, 0]]
-    tree_bag = MyBaggingID3(n_estimators=3, max_depth=2)
-    tree_bag.fit(X, y)
-    # tree_bag.predict_proba(X_test)
-    tree_bag.predict(X_test)
+    # # Debugging
+    # X = np.random.randint(0, 2, size=(100, 3))
+    # y = np.random.randint(0, 2, size=100)
+    # X_test = [[0, 0, 0], [1, 1, 1], [0, 1, 0], [1, 1, 0]]
+    # tree_bag = MyBaggingID3(n_estimators=3, max_depth=2)
+    # tree_bag.fit(X, y)
+    # # tree_bag.predict_proba(X_test)
+    # tree_bag.predict(X_test)
+    pass

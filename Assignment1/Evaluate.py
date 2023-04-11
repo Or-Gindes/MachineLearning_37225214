@@ -6,10 +6,8 @@ import os
 import numpy as np
 from InductionTree import evaluate
 from sklearn.preprocessing import OneHotEncoder, KBinsDiscretizer, LabelBinarizer
-import csv
 
 BASE_PATH = "C:\\Users\\Or\\PycharmProjects\\MachineLearning_37225214\\Assignment1\\datasets"
-FIELDS = ["Dataset", "Method", "Evaluation metric", "Evaluation Value", "Fit Runtime (in ms)"]
 
 if __name__ == "__main__":
     results = dict()
@@ -31,14 +29,10 @@ if __name__ == "__main__":
     # TODO: write detailed report -
     #  the report should include a table that compares the predictive performance of the various methods,
     #  in the following structure: Dataset | Method | Evaluation metric | Evaluation Value | Fit Runtime (in ms)
-    # with open("test_output.csv", "w", newline='') as f:
-    #     w = csv.DictWriter(f, FIELDS)
-    #     w.writeheader()
-    #     for dataset in results.keys():
-    #         for method in results[dataset].keys():
-    #             for metric, score in results[dataset][method].items():
-    #                 if 'time' not in metric:
-    #                     row = {"Dataset": dataset, "Method": method, "Evaluation metric": metric,
-    #                            "Evaluation Value": round(score, 3),
-    #                            "Fit Runtime (in ms)": round(results[dataset][method]['fit_time'], 3)}
-    #                     w.writerow(row)
+    """Evaluate using dataset #2 - link """
+
+    """Evaluate using dataset #3 - link """
+
+    """Evaluate using dataset #4 - link """
+
+    """Evaluate using dataset #5 - link """

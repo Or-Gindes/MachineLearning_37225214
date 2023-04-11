@@ -7,8 +7,9 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, make_scorer
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, make_scorer, plot_roc_curve
 from sklearn.model_selection import RepeatedKFold, cross_validate
+import matplotlib.pyplot as plt
 import wandb
 
 
@@ -136,6 +137,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
         self._n_features = None
         self._tree = None
         self._n_classes = None
+        self.classes_ = None
 
     def fit(self, X, y):
         """
@@ -148,7 +150,8 @@ class MyID3(BaseEstimator, ClassifierMixin):
         if len(X) != len(y):
             raise ValueError("X and y have mismatching shapes")
 
-        self._n_classes = len(np.unique(y))  # will be 2 because of binary tree
+        self.classes_ = np.unique(y)
+        self._n_classes = len(self.classes_)  # will be 2 because of binary tree
         self._n_features = X.shape[1]
         self._tree = self._build_tree(X, y, list(range(X.shape[0])))
 
@@ -250,6 +253,7 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
         self.max_depth = max_depth
         self._estimators = []
         self._n_classes = None
+        self.classes_ = None
 
     def fit(self, X, y):
         """
@@ -262,7 +266,9 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
         if len(X) != len(y):
             raise ValueError("X and y have mismatching shapes")
 
-        self._n_classes = len(np.unique(y))
+        self.classes_ = np.unique(y)
+        self._n_classes = len(self.classes_)
+
         # fit n base estimators
         for i in range(self.n_estimators):
             # randomly select training samples from X with replacement for each base classifier
@@ -329,38 +335,55 @@ MODEL_DICT = {"DecisionTreeClassifier": DecisionTreeClassifier, "BaggingClassifi
 
 
 # 7. Evaluation
-def evaluate(X, y, repetitions=2, n_folds=5):
+def evaluate(X, y, data_name, repetitions=2, n_folds=5, sync=False):
     """
     Compares the performance of MyID3 and MyBaggingID3 models against sklearn DecisionTreeClassifier and
     BaggingClassifier respectively use repeated K-fold cross-validation to evaluate both algorithms,
     Using at least 2 repetitions and at least 5 folds and returns Evaluation metrics
 
     Args:
-        X (ndarray):    Preprocessed binary Data matrix of shape(n_samples, n_features)
-        y (array like): list or ndarray with n_samples containing binary target variable
-        repetitions (int): number of repetitions >= 2
-        n_folds (int): number of folds >= 5
+        X (ndarray):        Preprocessed binary Data matrix of shape(n_samples, n_features)
+        y (array like):     list or ndarray with n_samples containing binary target variable
+        data_name (str):    Used to log data in wandb package
+        repetitions (int):  number of repetitions >= 2
+        n_folds (int):      number of folds >= 5
+        sync (bool):        a boolean arg determines if the run will be uploaded to wandb project
 
     Returns:
         evaluation_dict (dict): Dictionary of evaluation scores - Accuracy, Precision, Recall, F1-score, ROC_AUC score
     """
     assert (len(np.unique(y)) == 2 and len(np.unique(X)) == 2)
     assert (repetitions >= 2 and n_folds >= 5)
-    # TODO: Implement using weights & biases package to collect the results
-    # tutorial - https://colab.research.google.com/github/wandb/examples/blob/master/colabs/scikit/Simple_Scikit_Integration.ipynb#scrollTo=PusIQpdPzUbP
-    # create new project in https://wandb.ai/machinelearning_37225214/projects
 
     evaluation_dict = dict()
     # Perform the evaluation process for each of the models
     for model_name, model_class in MODEL_DICT.items():
+        if sync:
+            wandb.init(project='MachineLearning_Assignment1', name=f"{data_name}_{model_name}",
+                       config={"Dataset": data_name, "Method": model_name})
         evaluation_dict[model_name] = dict()
         rkf = RepeatedKFold(n_splits=n_folds, n_repeats=repetitions)
         model = model_class()
-        scoring = cross_validate(model, X, y, scoring={name: make_scorer(metric) for name, metric in EVALUATION_DICT.items()}, cv=rkf)
+        scoring = cross_validate(model, X, y, scoring={name: make_scorer(metric) for name, metric in
+                                                       EVALUATION_DICT.items()},
+                                 cv=rkf, return_estimator=True)
         for metric, scores in scoring.items():
+            if metric == 'estimator':
+                continue
             evaluation_dict[model_name][metric] = np.mean(scores)
-            if 'time' in metric:    # Transform fit & train metrics to units of ms
+            if 'time' in metric:  # Transform fit & train metrics to units of ms
                 evaluation_dict[model_name][metric] *= 1000
+
+            if sync and metric != 'score_time':
+                wandb.summary[metric.split('test_')[-1]] = evaluation_dict[model_name][metric]
+
+        plot_model = scoring['estimator'][np.random.choice(len(scoring['estimator']), 1)[0]]
+        wandb.sklearn.plot_roc(y, plot_model.predict_proba(X))
+        wandb.sklearn.plot_precision_recall(y, plot_model.predict_proba(X))
+
+        if sync:
+            wandb.log({"plot": plt})
+            wandb.finish()
     return evaluation_dict
 
 

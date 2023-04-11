@@ -25,21 +25,20 @@ if __name__ == "__main__":
     # We'll discretize the answers into two bins, 0 = [0,1] and 1 = [2,3,4]
     est = KBinsDiscretizer(n_bins=2, encode='ordinal', strategy='uniform').fit(X)
     X_transformed = est.transform(X)
-    results[data_name] = evaluate(X_transformed, y, repetitions=10)
+    results[data_name] = evaluate(X_transformed, y, repetitions=10, data_name=data_name, sync=True)
     pass
     # TODO: repeat this process with 4 more classification datasets
-    # TODO: implement weights & biases package usage (see evaluate function)
     # TODO: write detailed report -
     #  the report should include a table that compares the predictive performance of the various methods,
     #  in the following structure: Dataset | Method | Evaluation metric | Evaluation Value | Fit Runtime (in ms)
-    with open("test_output.csv", "w", newline='') as f:
-        w = csv.DictWriter(f, FIELDS)
-        w.writeheader()
-        for dataset in results.keys():
-            for method in results[dataset].keys():
-                for metric, score in results[dataset][method].items():
-                    if 'time' not in metric:
-                        row = {"Dataset": dataset, "Method": method, "Evaluation metric": metric,
-                               "Evaluation Value": round(score, 3),
-                               "Fit Runtime (in ms)": round(results[dataset][method]['fit_time'], 3)}
-                        w.writerow(row)
+    # with open("test_output.csv", "w", newline='') as f:
+    #     w = csv.DictWriter(f, FIELDS)
+    #     w.writeheader()
+    #     for dataset in results.keys():
+    #         for method in results[dataset].keys():
+    #             for metric, score in results[dataset][method].items():
+    #                 if 'time' not in metric:
+    #                     row = {"Dataset": dataset, "Method": method, "Evaluation metric": metric,
+    #                            "Evaluation Value": round(score, 3),
+    #                            "Fit Runtime (in ms)": round(results[dataset][method]['fit_time'], 3)}
+    #                     w.writerow(row)

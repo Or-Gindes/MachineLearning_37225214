@@ -5,6 +5,11 @@ Authors: Or Gindes & Alexandra Chilikov
 import math
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import BaggingClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+from sklearn.model_selection import KFold
+import wandb
 
 
 # 1. Calculate entropy
@@ -311,8 +316,30 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
         return np.argmax(pred_probas, axis=1)
 
 
-# Debugging
+# 7. Evaluation
+def evaluate(binary_array, repetitions=2, n_folds=5):
+    """
+    Compares the performance of MyID3 and MyBaggingID3 models against sklearn DecisionTreeClassifier and
+    BaggingClassifier respectively use repeated K-fold cross-validation to evaluate both algorithms,
+    Using at least 2 repetitions and at least 5 folds and returns Evaluation metrics
+
+    Args:
+        binary_array (ndarray): Preprocessed binary Data matrix of shape(n_samples, n_features)
+        repetitions (int): number of repetitions >= 2
+        n_folds (int): number of folds >= 5
+
+    Returns:
+        evaluation_dict (dict): Dictionary of evaluation scores - Accuracy, Precision, Recall, F1-score, ROC_AUC score
+        from sklearn - accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+    """
+    # TODO: Implement using weights & biases package to collect the results
+    # tutorial - https://colab.research.google.com/github/wandb/examples/blob/master/colabs/scikit/Simple_Scikit_Integration.ipynb#scrollTo=PusIQpdPzUbP
+    # create new project in https://wandb.ai/machinelearning_37225214/projects
+    pass
+
+
 if __name__ == "__main__":
+    # Debugging
     X = np.random.randint(0, 2, size=(100, 3))
     y = np.random.randint(0, 2, size=100)
     X_test = [[0, 0, 0], [1, 1, 1], [0, 1, 0], [1, 1, 0]]

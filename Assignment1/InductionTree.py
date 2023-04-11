@@ -92,16 +92,16 @@ class Node:
     """
     Support class for binary decision tree build of nodes
     """
-    def __init__(self, pred_value=None, split_feature=None, left_child=None, right_child=None):
+    def __init__(self, node_probas=None, split_feature=None, left_child=None, right_child=None):
         """
         Args:
-            pred_value (list or None): since the tree is binary this will be list for terminal nodes
+            node_probas (array like or None): since the tree is binary this will be list for terminal nodes
                                         with fraction of samples of the same class or None for other nodes.
             split_feature (int or None): index of feature to split by or None of this is a terminal node in the tree
             left_child (Node or None): Node to the left of this one or None of this is a terminal node in the tree
             right_child (Node or None): Node to the right of this one or None of this is a terminal node in the tree
         """
-        self.pred_value = pred_value
+        self.node_probas = node_probas
         self.split_feature = split_feature
         self.left_child = left_child
         self.right_child = right_child
@@ -123,6 +123,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
         self.max_depth = max_depth
         self._n_features = None
         self._tree = None
+        self._n_classes = 2     # Binary tree
 
     def fit(self, X, y):
         """
@@ -154,10 +155,12 @@ class MyID3(BaseEstimator, ClassifierMixin):
         # stopping criteria -
         # 1 + 2. only one sample in node / All samples in node have the same target value - pure node
         if len(node_indices) == 1 or len(np.unique(y[node_indices])) == 1:
-            return Node(pred_value=y[0])
+            pred_probas = np.zeros(self._n_classes)
+            pred_probas[y[0]] = 1.0
+            return Node(node_probas=pred_probas)
         # 3 + 4. No more features to split by / 4. Maximum depth - mixed node
         if depth == self._n_features or (self.max_depth and depth >= self.max_depth):
-            return Node(pred_value=int(np.argmax(np.unique(y[node_indices], return_counts=True)[1])))
+            return Node(node_probas=np.unique(y[node_indices], return_counts=True)[1] / len(node_indices))
 
         # no stopping criteria matched - find best feature for split
         best_feature = get_best_split(X, y, node_indices)
@@ -182,7 +185,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
         if self._tree is None:
             raise AssertionError("Model hasn't been fitted yet")
 
-        y_pred = np.zeros(len(X))
+        pred_probas = np.zeros((len(X), self._n_classes))
         for i, x in enumerate(X):
             node = self._tree
             while node.split_feature is not None:
@@ -192,8 +195,8 @@ class MyID3(BaseEstimator, ClassifierMixin):
                 # right:   feature value == 0
                 else:
                     node = node.right_child
-            y_pred[i] = node.pred_value
-        return y_pred
+            pred_probas[i] = node.node_probas
+        return pred_probas
 
     def predict(self, X):
         """
@@ -207,6 +210,8 @@ class MyID3(BaseEstimator, ClassifierMixin):
         if self._tree is None:
             raise AssertionError("Model hasn't been fitted yet")
 
+        pred_probas = self.predict_proba(X)
+        return np.argmax(pred_probas, axis=1)
 
 
 

@@ -18,7 +18,7 @@ if __name__ == "__main__":
     # Preprocess divorce_data
     np.random.shuffle(divorce_data)
     X = divorce_data[:, :-1]
-    y = divorce_data[:, 1]
+    y = divorce_data[:, -1]
     # Each feature in X is a question response between 0 and 4
     # We'll discretize the answers into two bins, 0 = [0,1] and 1 = [2,3,4]
     est = KBinsDiscretizer(n_bins=2, encode='ordinal', strategy='uniform').fit(X)

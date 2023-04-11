@@ -7,9 +7,8 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, make_scorer, plot_roc_curve
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, make_scorer
 from sklearn.model_selection import RepeatedKFold, cross_validate
-import matplotlib.pyplot as plt
 import wandb
 
 
@@ -382,7 +381,6 @@ def evaluate(X, y, data_name, repetitions=2, n_folds=5, sync=False):
         wandb.sklearn.plot_precision_recall(y, plot_model.predict_proba(X))
 
         if sync:
-            wandb.log({"plot": plt})
             wandb.finish()
     return evaluation_dict
 

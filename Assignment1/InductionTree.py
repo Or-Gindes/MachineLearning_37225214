@@ -7,6 +7,7 @@ import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 
+# 1. Calculate entropy
 def compute_entropy(y):
     """
     Computes the entropy for array y
@@ -27,6 +28,7 @@ def compute_entropy(y):
     return entropy
 
 
+# 2. Split dataset
 def split_dataset(X, node_indices, feature):
     """
     Splits the data at the given node into
@@ -48,6 +50,7 @@ def split_dataset(X, node_indices, feature):
     return left_indices, right_indices
 
 
+# 3. Calculate information gain
 def compute_information_gain(X, y, node_indices, feature):
     """
     Compute the information of splitting the node on a given feature
@@ -70,6 +73,7 @@ def compute_information_gain(X, y, node_indices, feature):
     return cost
 
 
+# 4. Get best split
 def get_best_split(X, y, node_indices):
     """
     Returns the optimal feature and threshold value
@@ -88,6 +92,7 @@ def get_best_split(X, y, node_indices):
     return best_feature
 
 
+# 5. Building the tree
 class Node:
     """
     Support class for binary decision tree build of nodes
@@ -123,7 +128,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
         self.max_depth = max_depth
         self._n_features = None
         self._tree = None
-        self._n_classes = 2     # Binary tree
+        self._n_classes = None
 
     def fit(self, X, y):
         """
@@ -133,13 +138,12 @@ class MyID3(BaseEstimator, ClassifierMixin):
             y (array like):         list or ndarray with n_samples containing the target variable
         """
         # Check that X and y have correct shape
-        if X.shape[0] != y.shape[0]:
+        if len(X) != len(y):
             raise ValueError("X and y have mismatching shapes")
 
+        self._n_classes = len(np.unique(y)) # will be 2 because of binary tree
         self._n_features = X.shape[1]
         self._tree = self._build_tree(X, y, list(range(X.shape[0])))
-
-        return self
 
     def _build_tree(self, X, y, node_indices, depth=0):
         """
@@ -214,4 +218,105 @@ class MyID3(BaseEstimator, ClassifierMixin):
         return np.argmax(pred_probas, axis=1)
 
 
+# 6. Bagging Algorithm
+class MyBaggingID3(BaseEstimator, ClassifierMixin):
+    """
+    Ensemble model using MyID3 as base classifier
+    BaseEstimator provides get_params and set_params methods
+    ClassifierMixin provides a score method
+    """
+    def __init__(self, n_estimators=3, max_samples=0.5, max_features=0.5, max_depth=None):
+        """
+        Initializes the decision tree estimator with give max_depth parameters
+        Args:
+            n_estimators (int):         The number of ID3 in the ensemble
+            max_samples (float):        float between 0 and 1 - represents the fraction of *samples* to draw from X
+                                        *with replacement* to train each base estimator
+            max_features (float):       float between 0 and 1 - represents the fraction of *features* to draw from X
+                                        *without replacement* to train each base estimator
+            max_depth (int or None):    maximum depth of the decision tree or None for unlimited depth
+        """
+        self.n_estimators = n_estimators
+        self.max_samples = max_samples
+        self.max_features = max_features
+        self.max_depth = max_depth
+        self._estimators = []
+        self._n_classes = None
 
+    def fit(self, X, y):
+        """
+        Build an ensemble model from the training set (X, y), using MyID3 as base classifier
+        Args:
+            X (ndarray):            Data matrix of shape(n_samples, n_features)
+            y (array like):         list or ndarray with n_samples containing the target variable
+        """
+        # Check that X and y have correct shape
+        if len(X) != len(y):
+            raise ValueError("X and y have mismatching shapes")
+
+        self._n_classes = len(np.unique(y))
+        # fit n base estimators
+        for i in range(self.n_estimators):
+            # randomly select training samples from X with replacement for each base classifier
+            tree_indices = np.random.choice(range(X.shape[0]), size=math.ceil(self.max_samples*X.shape[0]), replace=True)
+
+            # randomly select features from X without replacements from for each base classifier
+            tree_features = np.random.choice(range(X.shape[1]), size=math.ceil(self.max_features*X.shape[1]), replace=False)
+
+            base_tree = MyID3(max_depth=self.max_depth)
+            base_tree.fit(X=X[np.ix_(tree_indices, tree_features)], y=y[tree_indices])
+
+            self._estimators.append(base_tree)
+
+    def predict_proba(self, X):
+        """
+        Predicts the class labels for X using the ensemble model.
+        The predicted class probability is average of prediction probabilities from each base classifier.
+        Args:
+            X (ndarray):            Data matrix of shape(n_samples, n_features)
+
+        Returns:
+            Prob (ndarray)                of shape (n_samples, n_classes)
+        """
+        if len(self._estimators) == 0:
+            raise AssertionError("Model hasn't been fitted yet")
+
+        base_predictions = np.zeros((len(X), self.n_estimators))
+        for i, base_tree in enumerate(self._estimators):
+            base_predictions[:, i] = base_tree.predict(X)
+
+        pred_probas = np.zeros((len(X), self._n_classes))
+        for j, x in enumerate(X):
+            probas = np.unique(base_predictions[j, :], return_counts=True)[1] / self.n_estimators
+            if len(probas) == 1:
+                pred_probas[j, int(base_predictions[j, :][0])] = 1.0
+            else:
+                pred_probas[j] = probas
+
+        return pred_probas
+
+    def predict(self, X):
+        """
+        Predict class with the highest probability in the function predict_proba
+        Args:
+            X (ndarray):            Data matrix of shape(n_samples, n_features)
+
+        Returns:
+            y (array like) of shape (n_samples,)
+        """
+        if len(self._estimators) == 0:
+            raise AssertionError("Model hasn't been fitted yet")
+
+        pred_probas = self.predict_proba(X)
+        return np.argmax(pred_probas, axis=1)
+
+
+# Debugging
+if __name__ == "__main__":
+    X = np.random.randint(0, 2, size=(100, 3))
+    y = np.random.randint(0, 2, size=100)
+    X_test = [[0, 0, 0], [1, 1, 1], [0, 1, 0], [1, 1, 0]]
+    tree_bag = MyBaggingID3(n_estimators=3, max_depth=2)
+    tree_bag.fit(X, y)
+    # tree_bag.predict_proba(X_test)
+    tree_bag.predict(X_test)

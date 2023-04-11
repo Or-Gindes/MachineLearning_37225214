@@ -345,6 +345,7 @@ def evaluate(X, y, repetitions=2, n_folds=5):
         evaluation_dict (dict): Dictionary of evaluation scores - Accuracy, Precision, Recall, F1-score, ROC_AUC score
     """
     assert (len(np.unique(y)) == 2 and len(np.unique(X)) == 2)
+    assert (repetitions >= 2 and n_folds >= 5)
     # TODO: Implement using weights & biases package to collect the results
     # tutorial - https://colab.research.google.com/github/wandb/examples/blob/master/colabs/scikit/Simple_Scikit_Integration.ipynb#scrollTo=PusIQpdPzUbP
     # create new project in https://wandb.ai/machinelearning_37225214/projects

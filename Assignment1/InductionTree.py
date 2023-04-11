@@ -95,7 +95,8 @@ class Node:
     def __init__(self, pred_value=None, split_feature=None, left_child=None, right_child=None):
         """
         Args:
-            pred_value (int): since the tree is binary this will be either zero or one.
+            pred_value (list or None): since the tree is binary this will be list for terminal nodes
+                                        with fraction of samples of the same class or None for other nodes.
             split_feature (int or None): index of feature to split by or None of this is a terminal node in the tree
             left_child (Node or None): Node to the left of this one or None of this is a terminal node in the tree
             right_child (Node or None): Node to the right of this one or None of this is a terminal node in the tree
@@ -119,8 +120,8 @@ class MyID3(BaseEstimator, ClassifierMixin):
         Args:
             max_depth (int or None):    maximum depth of the decision tree or None for unlimited depth
         """
-        self._max_depth = max_depth
-        self._n_features= None
+        self.max_depth = max_depth
+        self._n_features = None
         self._tree = None
 
     def fit(self, X, y):
@@ -135,38 +136,38 @@ class MyID3(BaseEstimator, ClassifierMixin):
             raise ValueError("X and y have mismatching shapes")
 
         self._n_features = X.shape[1]
-        self._tree = self._build_tree(X, y)
+        self._tree = self._build_tree(X, y, list(range(X.shape[0])))
 
         return self
 
-    def _build_tree(self, X, y, depth=0):
+    def _build_tree(self, X, y, node_indices, depth=0):
         """
         Recursive function which implements the ID3 algorithm and returns the root node of the tree
         Args:
             X (ndarray):            Data matrix of shape(n_samples, n_features)
             y (array like):         list or ndarray with n_samples containing the target variable
+            node_indices (ndarray): List containing the active indices. I.e, the samples being considered in this step.
 
         Returns:
             root_node (Node):       tree root_node which connects to the remaining tree nodes
         """
         # stopping criteria -
-        # 1. All samples in node have the same target value
-        if len(np.unique(y)) == 1:
+        # 1 + 2. only one sample in node / All samples in node have the same target value - pure node
+        if len(node_indices) == 1 or len(np.unique(y[node_indices])) == 1:
             return Node(pred_value=y[0])
-        # 2. No more features to split by
-        # TODO:
-        # 3. only one smaple in node
-        if len(y) == 1:
-            return Node(pred_value=y[0])
-        # 4. Maximum depth
-        if self._max_depth and depth >= self._max_depth:
-            return Node(pred_value=int(np.argmax(np.unique(y, return_counts=True)[1])))
+        # 3 + 4. No more features to split by / 4. Maximum depth - mixed node
+        if depth == self._n_features or (self.max_depth and depth >= self.max_depth):
+            return Node(pred_value=int(np.argmax(np.unique(y[node_indices], return_counts=True)[1])))
 
-        # no stopping criteria matched
-        best_feature = get_best_split()# TODO:
+        # no stopping criteria matched - find best feature for split
+        best_feature = get_best_split(X, y, node_indices)
 
+        split_node = Node(split_feature=best_feature)
+        left, right = split_dataset(X, node_indices, best_feature)
+        split_node.left_child = self._build_tree(X, y, node_indices=left, depth=depth + 1)
+        split_node.right_child = self._build_tree(X, y, node_indices=right, depth=depth + 1)
 
-        return root_node
+        return split_node
 
     def predict_proba(self, X):
         """
@@ -181,6 +182,19 @@ class MyID3(BaseEstimator, ClassifierMixin):
         if self._tree is None:
             raise AssertionError("Model hasn't been fitted yet")
 
+        y_pred = np.zeros(len(X))
+        for i, x in enumerate(X):
+            node = self._tree
+            while node.split_feature is not None:
+                # left:    feature value == 1
+                if x[node.split_feature] == 1:
+                    node = node.left_child
+                # right:   feature value == 0
+                else:
+                    node = node.right_child
+            y_pred[i] = node.pred_value
+        return y_pred
+
     def predict(self, X):
         """
         Predict class with the highest probability in the function predict_proba
@@ -192,5 +206,7 @@ class MyID3(BaseEstimator, ClassifierMixin):
         """
         if self._tree is None:
             raise AssertionError("Model hasn't been fitted yet")
+
+
 
 

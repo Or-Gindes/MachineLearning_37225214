@@ -166,6 +166,9 @@ class MyID3(BaseEstimator, ClassifierMixin):
             root_node (Node):       tree root_node which connects to the remaining tree nodes
         """
         # stopping criteria -
+        # 0. if there are no instances in the node, there is no node
+        if len(node_indices) == 0:
+            return None
         # 1 + 2. only one sample in node / All samples in node have the same target value - pure node
         if len(node_indices) == 1 or len(np.unique(y[node_indices])) == 1:
             pred_probas = np.zeros(self._n_classes)

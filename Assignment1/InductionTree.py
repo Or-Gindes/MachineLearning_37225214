@@ -166,9 +166,6 @@ class MyID3(BaseEstimator, ClassifierMixin):
             root_node (Node):       tree root_node which connects to the remaining tree nodes
         """
         # stopping criteria -
-        # 0. if there are no instances in the node, there is no node
-        if len(node_indices) == 0:
-            return None
         # 1 + 2. only one sample in node / All samples in node have the same target value - pure node
         if len(node_indices) == 1 or len(np.unique(y[node_indices])) == 1:
             pred_probas = np.zeros(self._n_classes)
@@ -183,6 +180,9 @@ class MyID3(BaseEstimator, ClassifierMixin):
 
         split_node = Node(split_feature=best_feature)
         left, right = split_dataset(X, node_indices, best_feature)
+        # if no feature can separate the remaining observations return the node as is
+        if len(left) == 0 or len(right) == 0:
+            return Node(node_probas=np.unique(y[node_indices], return_counts=True)[1] / len(node_indices))
         split_node.left_child = self._build_tree(X, y, node_indices=left, depth=depth + 1)
         split_node.right_child = self._build_tree(X, y, node_indices=right, depth=depth + 1)
 
@@ -332,8 +332,8 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
 EVALUATION_DICT = {"Accuracy": accuracy_score, "Precision": precision_score, "Recall": recall_score,
                    "F1-score": f1_score, "ROC_AUC": roc_auc_score}
 
-MODEL_DICT = {"DecisionTreeClassifier": DecisionTreeClassifier, "BaggingClassifier": BaggingClassifier,
-              "MyID3": MyID3, "MyBaggingID3": MyBaggingID3}
+MODEL_DICT = { "MyBaggingID3": MyBaggingID3, "DecisionTreeClassifier": DecisionTreeClassifier, "BaggingClassifier": BaggingClassifier,
+              "MyID3": MyID3}
 
 PARAMS_GRID = {"tree": {'max_depth': [3, 5, 7]},
                "bagging": {'max_samples': [0.25, 0.5, 0.75],

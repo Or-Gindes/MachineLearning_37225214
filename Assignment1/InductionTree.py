@@ -332,8 +332,8 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
 EVALUATION_DICT = {"Accuracy": accuracy_score, "Precision": precision_score, "Recall": recall_score,
                    "F1-score": f1_score, "ROC_AUC": roc_auc_score}
 
-MODEL_DICT = { "MyBaggingID3": MyBaggingID3, "DecisionTreeClassifier": DecisionTreeClassifier, "BaggingClassifier": BaggingClassifier,
-              "MyID3": MyID3}
+MODEL_DICT = {"MyID3": MyID3, "MyBaggingID3": MyBaggingID3,
+              "DecisionTreeClassifier": DecisionTreeClassifier, "BaggingClassifier": BaggingClassifier}
 
 PARAMS_GRID = {"tree": {'max_depth': [3, 5, 7]},
                "bagging": {'max_samples': [0.25, 0.5, 0.75],

@@ -4,6 +4,7 @@ Authors: Or Gindes & Alexandra Chilikov
 """
 import math
 import numpy as np
+import pandas as pd
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier
@@ -149,6 +150,12 @@ class MyID3(BaseEstimator, ClassifierMixin):
         if len(X) != len(y):
             raise ValueError("X and y have mismatching shapes")
 
+        # if input is a dataframe convert it to numpy array
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+        if isinstance(y, pd.Series):
+            y = y.to_numpy()
+
         self.classes_ = np.unique(y)
         self._n_classes = len(self.classes_)  # will be 2 because of binary tree
         self._n_features = X.shape[1]
@@ -200,6 +207,9 @@ class MyID3(BaseEstimator, ClassifierMixin):
         """
         if self._tree is None:
             raise AssertionError("Model hasn't been fitted yet")
+
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
 
         pred_probas = np.zeros((len(X), self._n_classes))
         for i, x in enumerate(X):
@@ -268,6 +278,12 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
         if len(X) != len(y):
             raise ValueError("X and y have mismatching shapes")
 
+        # if input is a dataframe convert it to numpy array
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
+        if isinstance(y, pd.Series):
+            y = y.to_numpy()
+
         self.classes_ = np.unique(y)
         self._n_classes = len(self.classes_)
 
@@ -298,6 +314,9 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
         """
         if len(self._estimators) == 0:
             raise AssertionError("Model hasn't been fitted yet")
+
+        if isinstance(X, pd.DataFrame):
+            X = X.to_numpy()
 
         base_predictions = np.zeros((len(X), self.n_estimators))
         for i, base_tree in enumerate(self._estimators):

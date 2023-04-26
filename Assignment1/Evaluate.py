@@ -23,10 +23,12 @@ if __name__ == "__main__":
     # We'll discretize the answers into two bins, 0 = [0,1] and 1 = [2,3,4]
     est = KBinsDiscretizer(n_bins=2, encode='ordinal', strategy='uniform').fit(X)
     X_transformed = est.transform(X)
-    results[data_name] = evaluate(X_transformed, y, repetitions=10, data_name=data_name, sync=True)
+    results[data_name] = evaluate(X_transformed, y, repetitions=10, data_name=data_name, sync=False)
     pass
     # TODO: repeat this process with 4 more classification datasets
     # TODO: write detailed report -
+    #  Evaluation report: Write a short report presenting the detailed results and summarizing your findings,
+    #  including which model performed the best, and why.wwwwwwwwwwwwwwww
     #  the report should include a table that compares the predictive performance of the various methods,
     #  in the following structure: Dataset | Method | Evaluation metric | Evaluation Value | Fit Runtime (in ms)
     """Evaluate using dataset #2 - link """

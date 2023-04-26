@@ -8,7 +8,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import BaggingClassifier
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, make_scorer
-from sklearn.model_selection import RepeatedKFold, cross_validate
+from sklearn.model_selection import RepeatedKFold, cross_validate, GridSearchCV
 import wandb
 
 
@@ -235,7 +235,7 @@ class MyBaggingID3(BaseEstimator, ClassifierMixin):
     ClassifierMixin provides a score method
     """
 
-    def __init__(self, n_estimators=10, max_samples=1.0, max_features=1.0, max_depth=None):
+    def __init__(self, n_estimators=100, max_samples=1.0, max_features=1.0, max_depth=None):
         """
         Initializes the decision tree estimator with give max_depth parameters
         Args:
@@ -332,6 +332,10 @@ EVALUATION_DICT = {"Accuracy": accuracy_score, "Precision": precision_score, "Re
 MODEL_DICT = {"DecisionTreeClassifier": DecisionTreeClassifier, "BaggingClassifier": BaggingClassifier,
               "MyID3": MyID3, "MyBaggingID3": MyBaggingID3}
 
+PARAMS_GRID = {"tree": {'max_depth': [3, 5, 7]},
+               "bagging": {'max_samples': [0.25, 0.5, 0.75],
+                           'max_features': [0.25, 0.5, 0.75]}}
+
 
 # 7. Evaluation
 def evaluate(X, y, data_name, repetitions=2, n_folds=5, sync=False):
@@ -363,8 +367,10 @@ def evaluate(X, y, data_name, repetitions=2, n_folds=5, sync=False):
         evaluation_dict[model_name] = dict()
         rkf = RepeatedKFold(n_splits=n_folds, n_repeats=repetitions)
         model = model_class()
-        scoring = cross_validate(model, X, y, scoring={name: make_scorer(metric) for name, metric in
-                                                       EVALUATION_DICT.items()},
+        params_grid = PARAMS_GRID['tree'] if model_name in ['DecisionTreeClassifier', 'MyID3'] else PARAMS_GRID['bagging']
+        grid_search = GridSearchCV(model, params_grid, cv=rkf)
+        scoring = cross_validate(grid_search, X, y, scoring={name: make_scorer(metric) for name, metric in
+                                                             EVALUATION_DICT.items()},
                                  cv=rkf, return_estimator=True)
         for metric, scores in scoring.items():
             if metric == 'estimator':
@@ -376,9 +382,10 @@ def evaluate(X, y, data_name, repetitions=2, n_folds=5, sync=False):
             if sync and metric != 'score_time':
                 wandb.summary[metric.split('test_')[-1]] = evaluation_dict[model_name][metric]
 
-        plot_model = scoring['estimator'][np.random.choice(len(scoring['estimator']), 1)[0]]
-        wandb.sklearn.plot_roc(y, plot_model.predict_proba(X))
-        wandb.sklearn.plot_precision_recall(y, plot_model.predict_proba(X))
+        plot_model = scoring['estimator'][np.random.choice(len(scoring['estimator']), 1)[0]].best_estimator_
+        if sync:
+            wandb.sklearn.plot_roc(y, plot_model.predict_proba(X))
+            wandb.sklearn.plot_precision_recall(y, plot_model.predict_proba(X))
 
         if sync:
             wandb.finish()

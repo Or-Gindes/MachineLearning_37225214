@@ -1,55 +1,102 @@
 """
-Assignment1 - Implementation of a decision tree algorithm called ID3 for binary features and preformance evaluation
-Authors: Or Gindes & Alexandra Chilikov
+Assignment1 - Implementation of a decision tree algorithm called ID3 for binary features and performance evaluation
+Authors: Or Gindes & Hilla Halevi
 """
 import os
 import numpy as np
-from InductionTree import evaluate
-from sklearn.preprocessing import OneHotEncoder, KBinsDiscretizer, LabelBinarizer
-import pandas as pd
+from InductionTree import MyID3, MyBaggingID3
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import BaggingClassifier
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, make_scorer
+from sklearn.model_selection import RepeatedKFold, cross_validate
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, KBinsDiscretizer
+import wandb
 
-BASE_PATH = "C:\\Users\\Or\\PycharmProjects\\MachineLearning_37225214\\Assignment1\\datasets"
+BASE_DATA_PATH = os.path.join(os.getcwd(), 'datasets')
 
-if __name__ == "__main__":
-    results = dict()
-    """Evaluate using divorce dataset - https://archive.ics.uci.edu/ml/datasets/Divorce+Predictors+data+set"""
-    data_name = "divorce"
-    file_path = os.path.join(BASE_PATH, f"{data_name}.csv")
-    divorce_data = np.genfromtxt(file_path, delimiter=';', skip_header=1)
-    # Preprocess divorce_data
-    np.random.shuffle(divorce_data)
-    X = divorce_data[:, :-1]
-    y = divorce_data[:, -1]
-    # Each feature in X is a question response between 0 and 4
-    # We'll discretize the answers into two bins, 0 = [0,1] and 1 = [2,3,4]
-    est = KBinsDiscretizer(n_bins=2, encode='ordinal', strategy='uniform').fit(X)
-    X_transformed = est.transform(X)
-    # results[data_name] = evaluate(X_transformed, y, repetitions=3, data_name=data_name, sync=False)
-    pass
-    # TODO: repeat this process with 4 more classification datasets
-    # TODO: write detailed report -
-    #  Evaluation report: Write a short report presenting the detailed results and summarizing your findings,
-    #  including which model performed the best, and why.
-    #  the report should include a table that compares the predictive performance of the various methods,
-    #  in the following structure: Dataset | Method | Evaluation metric | Evaluation Value | Fit Runtime (in ms)
-    """Evaluate using dataset #2 - link """
-    df = pd.read_csv('C:\\Users\\Or\\PycharmProjects\\MachineLearning_37225214\\Assignment1\\datasets\\diabetes_prediction_dataset.csv')
-    X = df.drop(['diabetes'], axis=1)
-    y = df['diabetes']
-    encoder = OneHotEncoder(sparse=False)
-    cols_to_encode = ['gender', 'smoking_history']
-    encoded_cols = encoder.fit_transform(X.loc[:, cols_to_encode])
-    encoded_df = pd.DataFrame(encoded_cols, columns=encoder.get_feature_names(cols_to_encode))
-    X = pd.concat([X.drop(columns=cols_to_encode), encoded_df], axis=1)
+EVALUATION_DICT = {"Accuracy": accuracy_score, "Precision": precision_score, "Recall": recall_score,
+                   "F1-score": f1_score, "ROC_AUC": roc_auc_score}
 
-    # Discretize
-    discretize_cols = ['age', 'bmi', 'HbA1c_level', 'blood_glucose_level']
-    discretizer = KBinsDiscretizer(n_bins=2, encode='ordinal', strategy='uniform')
-    X.loc[:, discretize_cols] = discretizer.fit_transform(X.loc[:, discretize_cols])
-    data_name = "diabetes.csv"
-    results[data_name] = evaluate(X, y, data_name, repetitions=2, n_folds=5, sync=False)
-    """Evaluate using dataset #3 - link """
-    pass
-    """Evaluate using dataset #4 - link """
+MODEL_DICT = {"MyID3": MyID3, "DecisionTreeClassifier": DecisionTreeClassifier,
+              "MyBaggingID3": MyBaggingID3, "BaggingClassifier": BaggingClassifier}
 
-    """Evaluate using dataset #5 - link """
+
+# 7. Evaluation
+def evaluate(X, y, data_name, repetitions=2, n_folds=5, sync=False):
+    """
+    Compares the performance of MyID3 and MyBaggingID3 models against sklearn DecisionTreeClassifier and
+    BaggingClassifier respectively use repeated K-fold cross-validation to evaluate both algorithms,
+    Using at least 2 repetitions and at least 5 folds and returns Evaluation metrics
+
+    Args:
+        X (ndarray):        Preprocessed binary Data matrix of shape(n_samples, n_features)
+        y (array like):     list or ndarray with n_samples containing binary target variable
+        data_name (str):    Used to log data in wandb package
+        repetitions (int):  number of repetitions >= 2
+        n_folds (int):      number of folds >= 5
+        sync (bool):        a boolean arg determines if the run will be uploaded to wandb project
+
+    Returns:
+        evaluation_dict (dict): Dictionary of evaluation scores - Accuracy, Precision, Recall, F1-score, ROC_AUC score
+    """
+    assert (len(np.unique(y)) == 2 and len(np.unique(X)) == 2)
+    assert (repetitions >= 2 and n_folds >= 5)
+
+    evaluation_dict = dict()
+    # Perform the evaluation process for each of the models
+    for model_name, model_class in MODEL_DICT.items():
+        print(f"Starting evaluation process on {model_name}")
+        if sync:
+            wandb.init(project='MachineLearning_Assignment1', name=f"{data_name}_{model_name}",
+                       config={"Dataset": data_name, "Method": model_name})
+        evaluation_dict[model_name] = dict()
+        # Cross validation method - some of the datasets have class imbalance so Stratified RepeatedKFold is the most appropriate
+        rskf = RepeatedKFold(n_splits=n_folds, n_repeats=repetitions, random_state=42)
+        model = model_class()
+        # Perform cross validation on the tuned model to get the required metrics for the model
+        scoring = cross_validate(model, X, y, cv=rskf, return_estimator=True, return_train_score=False,
+                                 scoring={name: make_scorer(metric) for name, metric in EVALUATION_DICT.items()})
+        for metric, scores in scoring.items():
+            if metric == 'estimator':
+                continue
+            evaluation_dict[model_name][metric] = np.mean(scores)
+            if 'time' in metric:  # Transform fit & train fit_time to units of ms
+                evaluation_dict[model_name][metric] *= 1000
+
+            # log relevant metrics using the weights & biases package
+            if sync and metric != 'score_time' and ('test_' in metric or 'fit' in metric):
+                wandb.summary[metric.split('test_')[-1]] = round(evaluation_dict[model_name][metric], 3)
+
+        # Randomly select a decision tree model to plot from the best estimator of the gridsearch
+        plot_model = scoring['estimator'][np.random.choice(len(scoring['estimator']), 1)[0]]
+        if sync:
+            # plot ROC and PR plots in weights & biases and close th model instance
+            wandb.sklearn.plot_roc(y, plot_model.predict_proba(X))
+            wandb.sklearn.plot_precision_recall(y, plot_model.predict_proba(X))
+            wandb.finish()
+    return evaluation_dict
+
+
+def preprocess(X, cat_cols, cont_cols, n_bins=2):
+    """
+    Preprocessing helper function
+        Args:
+        X (ndarray):        Original array with data
+        cat_cols (list):    list of strings of categorical column names to be oneHot encoded
+        cont_cols (list):   list of strings of numerical (continuous) column names to be binned
+        n_bins (int):       number of bins for discretization
+
+    Returns:
+        X_preprocessed (ndarray): X transformed by the preprocessor class
+    """
+
+    # Define the transformers for the preprocessing pipeline
+    cat_transformer = OneHotEncoder(handle_unknown="ignore")
+    cont_transformer = KBinsDiscretizer(n_bins=n_bins, encode="onehot-dense", strategy="uniform")
+    preprocessor = ColumnTransformer(transformers=[("cat", cat_transformer, cat_cols),
+                                                   ("cont", cont_transformer, cont_cols)])
+
+    # Fit and transform the preprocessing pipeline
+    X_preprocessed = preprocessor.fit_transform(X)
+    return X_preprocessed

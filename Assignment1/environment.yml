@@ -1,0 +1,11 @@
+name: MachineLearning_37225214
+channels:
+  - defaults
+dependencies:
+  - matplotlib
+  - numpy
+  - pandas
+  - scikit-learn
+  - jupyter
+  - pip:
+    - wandb

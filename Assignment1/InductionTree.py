@@ -1,6 +1,6 @@
 """
 Assignment1 - Implementation of a decision tree algorithm called ID3 for binary features and performance evaluation
-Authors: Or Gindes & Hilla Halevi
+Authors: Or Gindes & Hilla Ashkenazi
 """
 import math
 import numpy as np
